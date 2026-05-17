@@ -195,6 +195,62 @@ function render() {
   ).join('');
 }
 
+function evalExpr(s) {
+  let i = 0;
+  const skip = () => { while (i < s.length && s[i] === ' ') i++; };
+  const parseNum = () => {
+    skip();
+    let j = i;
+    while (j < s.length && /[0-9.]/.test(s[j])) j++;
+    if (j === i) throw new Error('expected number');
+    const n = parseFloat(s.slice(i, j));
+    if (isNaN(n)) throw new Error('bad number');
+    i = j;
+    return n;
+  };
+  const parsePrimary = () => {
+    skip();
+    if (s[i] === '(') { i++; const v = parseExpr(); skip(); if (s[i] !== ')') throw new Error('missing )'); i++; return v; }
+    return parseNum();
+  };
+  const parseUnary = () => {
+    skip();
+    if (s[i] === '+') { i++; return parseUnary(); }
+    if (s[i] === '-') { i++; return -parseUnary(); }
+    return parsePrimary();
+  };
+  const parseFactor = () => {
+    let v = parseUnary();
+    skip();
+    if (s[i] === '*' && s[i+1] === '*') { i += 2; v = v ** parseFactor(); }
+    return v;
+  };
+  const parseTerm = () => {
+    let v = parseFactor();
+    while (true) {
+      skip();
+      if (s[i] === '*' && s[i+1] !== '*') { i++; v = v * parseFactor(); }
+      else if (s[i] === '/') { i++; v = v / parseFactor(); }
+      else break;
+    }
+    return v;
+  };
+  const parseExpr = () => {
+    let v = parseTerm();
+    while (true) {
+      skip();
+      if (s[i] === '+') { i++; v = v + parseTerm(); }
+      else if (s[i] === '-') { i++; v = v - parseTerm(); }
+      else break;
+    }
+    return v;
+  };
+  const r = parseExpr();
+  skip();
+  if (i < s.length) throw new Error('unexpected: ' + s.slice(i));
+  return r;
+}
+
 function fmt(n) {
   if (!isFinite(n)) return 'Error';
   let s = Number(n.toPrecision(12));
@@ -247,9 +303,9 @@ function press(l) {
     let e = expr + cur;
     while (parens > 0) { e += ')'; parens--; }
     try {
-      let val = Function('"use strict"; return (' + e + ')')();
-      if (!isFinite(val) && !isNaN(val)) throw 0;
-      if (isNaN(val)) { cur = 'Error'; lastRes = null; }
+      let val = evalExpr(e);
+      if (typeof val !== 'number' || isNaN(val)) { cur = 'Error'; lastRes = null; }
+      else if (!isFinite(val)) { cur = 'Error'; lastRes = null; }
       else { expr = e + ' ='; cur = fmt(val); lastRes = parseFloat(cur); }
     } catch { cur = 'Error'; lastRes = null; }
   }
