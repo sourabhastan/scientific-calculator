@@ -2,4 +2,4 @@ services:
   - type: web
     name: scientific-calculator
     runtime: static
-    staticPublishPath: ./public
+    staticPublishPath: public
