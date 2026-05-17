@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scientific Calculator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .calculator {
+    background: #16213e;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    width: 440px;
+  }
+  .display {
+    background: #0f3460;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    position: relative;
+  }
+  .memory-indicator {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    color: #e94560;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .expression {
+    color: #8899aa;
+    font-size: 15px;
+    min-height: 22px;
+    word-break: break-all;
+    text-align: right;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .result {
+    color: #e0e0e0;
+    font-size: 34px;
+    font-weight: 300;
+    word-break: break-all;
+    text-align: right;
+    width: 100%;
+  }
+  .mode-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .mode-row button {
+    flex: 1;
+    padding: 7px;
+    border: none;
+    border-radius: 8px;
+    background: #0f3460;
+    color: #7799bb;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .mode-row button.active {
+    background: #e94560;
+    color: #fff;
+  }
+  .buttons {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+  }
+  .buttons button {
+    border: none;
+    border-radius: 10px;
+    padding: 13px 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.12s;
+    font-family: inherit;
+    font-weight: 500;
+  }
+  .buttons button:active { transform: scale(0.93); }
+  .num { background: #1a1a40; color: #e0e0e0; font-size: 17px; }
+  .num:hover { background: #26264e; }
+  .op { background: #0f3460; color: #6ab0f3; font-size: 17px; }
+  .op:hover { background: #1a4a80; }
+  .fn { background: #1a1a40; color: #c0a0e0; font-size: 13px; }
+  .fn:hover { background: #26264e; }
+  .eq { background: #e94560; color: #fff; font-size: 20px; font-weight: 700; }
+  .eq:hover { background: #ff5570; }
+  .cl { background: #533483; color: #e0e0e0; }
+  .cl:hover { background: #6a44a3; }
+</style>
+</head>
+<body>
+<div class="calculator">
+  <div class="display">
+    <div class="memory-indicator" id="memInd"></div>
+    <div class="expression" id="expr"></div>
+    <div class="result" id="result">0</div>
+  </div>
+  <div class="mode-row">
+    <button id="degBtn" class="active" onclick="setAngle('deg')">DEG</button>
+    <button id="radBtn" onclick="setAngle('rad')">RAD</button>
+    <button id="secBtn" onclick="toggle2nd()">2nd</button>
+  </div>
+  <div class="buttons" id="grid"></div>
+</div>
+<script>
+let expr = '', cur = '0', lastRes = null, mem = 0, deg = true, sec = false, parens = 0;
+
+const $ = id => document.getElementById(id);
+const toR = v => deg ? v * Math.PI / 180 : v;
+const fromR = v => deg ? v * 180 / Math.PI : v;
+
+function fact(n) {
+  if (n < 0 || n > 170 || n !== Math.floor(n)) return NaN;
+  let r = 1; for (let i = 2; i <= n; i++) r *= i; return r;
+}
+
+const unary = {
+  'sin': v => Math.sin(toR(v)),
+  'cos': v => Math.cos(toR(v)),
+  'tan': v => Math.tan(toR(v)),
+  'asin': v => fromR(Math.asin(v)),
+  'acos': v => fromR(Math.acos(v)),
+  'atan': v => fromR(Math.atan(v)),
+  'ln': v => Math.log(v),
+  'log': v => Math.log10(v),
+  'log₂': v => Math.log2(v),
+  '√': v => Math.sqrt(v),
+  '∛': v => Math.cbrt(v),
+  'x²': v => v * v,
+  'x³': v => v ** 3,
+  '1/x': v => 1 / v,
+  'x!': v => fact(v),
+  '|x|': v => Math.abs(v),
+  'eˣ': v => Math.exp(v),
+  '10ˣ': v => 10 ** v,
+  '2ˣ': v => 2 ** v,
+};
+
+const primary = [
+  ['sin','fn'],['cos','fn'],['tan','fn'],['(','op'],[')','op'],
+  ['ln','fn'],['log','fn'],['√','fn'],['x²','fn'],['x!','fn'],
+  ['7','num'],['8','num'],['9','num'],['÷','op'],['⌫','cl'],
+  ['4','num'],['5','num'],['6','num'],['×','op'],['MC','fn'],
+  ['1','num'],['2','num'],['3','num'],['−','op'],['MR','fn'],
+  ['0','num'],['.','num'],['eˣ','fn'],['+','op'],['M+','fn'],
+  ['±','fn'],['AC','cl'],['xʸ','op'],['=','eq'],['M−','fn'],
+];
+
+const secondary = [
+  ['asin','fn'],['acos','fn'],['atan','fn'],['(','op'],[')','op'],
+  ['10ˣ','fn'],['2ˣ','fn'],['∛','fn'],['x³','fn'],['1/x','fn'],
+  ['7','num'],['8','num'],['9','num'],['÷','op'],['⌫','cl'],
+  ['4','num'],['5','num'],['6','num'],['×','op'],['MC','fn'],
+  ['1','num'],['2','num'],['3','num'],['−','op'],['MR','fn'],
+  ['0','num'],['.','num'],['log₂','fn'],['+','op'],['M+','fn'],
+  ['|x|','fn'],['AC','cl'],['ʸ√x','op'],['=','eq'],['M−','fn'],
+];
+
+function setAngle(m) {
+  deg = m === 'deg';
+  $('degBtn').classList.toggle('active', deg);
+  $('radBtn').classList.toggle('active', !deg);
+}
+
+function toggle2nd() {
+  sec = !sec;
+  $('secBtn').classList.toggle('active', sec);
+  render();
+}
+
+function render() {
+  const layout = sec ? secondary : primary;
+  $('grid').innerHTML = layout.map(([label, cls]) =>
+    `<button class="${cls}" onclick="press('${label}')">${label}</button>`
+  ).join('');
+}
+
+function fmt(n) {
+  if (!isFinite(n)) return 'Error';
+  let s = Number(n.toPrecision(12));
+  let str = String(s);
+  return str.length > 14 ? s.toExponential(6) : str;
+}
+
+function show() {
+  $('expr').textContent = expr;
+  $('result').textContent = cur;
+  $('result').style.fontSize = cur.length > 14 ? '22px' : cur.length > 10 ? '28px' : '34px';
+  $('memInd').textContent = mem !== 0 ? 'M' : '';
+}
+
+function press(l) {
+  if ('0123456789'.includes(l)) {
+    if (cur === '0' || cur === 'Error' || lastRes !== null) {
+      if (lastRes !== null) { expr = ''; lastRes = null; }
+      cur = l;
+    } else cur += l;
+  }
+  else if (l === '.') {
+    if (lastRes !== null) { expr = ''; cur = '0'; lastRes = null; }
+    if (!cur.includes('.')) cur += '.';
+  }
+  else if (l === 'AC') { expr = ''; cur = '0'; lastRes = null; parens = 0; }
+  else if (l === '⌫') { cur = cur.length > 1 ? cur.slice(0, -1) : '0'; }
+  else if (l === '±') { if (cur !== '0') cur = cur.startsWith('-') ? cur.slice(1) : '-' + cur; }
+  else if (l === '(') {
+    if (lastRes !== null) { expr = ''; lastRes = null; }
+    expr += '('; parens++; cur = '0';
+  }
+  else if (l === ')') {
+    if (parens > 0) { expr += cur + ')'; parens--; cur = '0'; }
+  }
+  else if (['+','−','×','÷'].includes(l)) {
+    const map = {'+':'+','−':'-','×':'*','÷':'/'};
+    expr = (lastRes !== null ? String(lastRes) : expr + cur) + map[l];
+    lastRes = null; cur = '0';
+  }
+  else if (l === 'xʸ') {
+    expr = (lastRes !== null ? String(lastRes) : expr + cur) + '**';
+    lastRes = null; cur = '0';
+  }
+  else if (l === 'ʸ√x') {
+    expr = (lastRes !== null ? String(lastRes) : expr + cur) + '**(1/';
+    parens++; lastRes = null; cur = '0';
+  }
+  else if (l === '=') {
+    let e = expr + cur;
+    while (parens > 0) { e += ')'; parens--; }
+    try {
+      let val = Function('"use strict"; return (' + e + ')')();
+      if (!isFinite(val) && !isNaN(val)) throw 0;
+      if (isNaN(val)) { cur = 'Error'; lastRes = null; }
+      else { expr = e + ' ='; cur = fmt(val); lastRes = parseFloat(cur); }
+    } catch { cur = 'Error'; lastRes = null; }
+  }
+  else if (l === 'MC') mem = 0;
+  else if (l === 'MR') { cur = fmt(mem); lastRes = null; }
+  else if (l === 'M+') mem += parseFloat(cur) || 0;
+  else if (l === 'M−') mem -= parseFloat(cur) || 0;
+  else if (unary[l]) {
+    let v = lastRes !== null ? lastRes : parseFloat(cur);
+    lastRes = null;
+    try {
+      let r = unary[l](v);
+      if (isNaN(r)) { cur = 'Error'; }
+      else if (!isFinite(r)) { cur = 'Error'; }
+      else { expr = l + '(' + fmt(v) + ')'; cur = fmt(r); lastRes = parseFloat(cur); }
+    } catch { cur = 'Error'; }
+  }
+  show();
+}
+
+document.addEventListener('keydown', e => {
+  const m = {'0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+    '.':'.', '+':'+', '-':'−', '*':'×', '/':'÷', 'Enter':'=', '=':'=',
+    'Backspace':'⌫', 'Escape':'AC', '(':'(', ')':')', '^':'xʸ'};
+  if (m[e.key]) { e.preventDefault(); press(m[e.key]); }
+});
+
+render(); show();
+</script>
+</body>
+</html>
