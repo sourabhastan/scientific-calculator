@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+.wrangler
+.dev.vars*
+.env*
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+render.yaml
+wrangler.jsonc
+README.md
